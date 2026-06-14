@@ -349,7 +349,7 @@ Rust:   acode_hash_file(path) → JSON string via CString::into_raw()
 ```bash
 # In CI (GitHub Actions, ubuntu-latest):
 cargo install cargo-ndk
-cargo ndk -t aarch64-linux-android -p 26 -o ./libs/arm64 build --release
+cargo ndk -t aarch64-linux-android --platform 26 -o ./libs/arm64 build --release
 # Produces: libs/arm64/libacode_native.so
 ```
 
