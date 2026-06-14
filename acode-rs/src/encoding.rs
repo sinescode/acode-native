@@ -6,7 +6,6 @@
 //! detection which only checks BOM, null-byte ratio, and UTF-8 validity.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -260,7 +259,7 @@ pub fn decode(data: &[u8], encoding: &str) -> Result<DecodeResult, String> {
         "UTF-8" => {
             match std::str::from_utf8(&data[start..]) {
                 Ok(s) => s.to_string(),
-                Err(e) => {
+                Err(_e) => {
                     has_errors = true;
                     // Count errors from the Utf8Error
                     error_count = 1;

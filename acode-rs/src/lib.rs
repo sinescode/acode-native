@@ -684,7 +684,7 @@ pub unsafe extern "C" fn acode_sanitize_html(
 // ---------------------------------------------------------------------------
 
 /// Helper: convert a C string to a Rust String, returning an error JSON on null.
-unsafe fn cstr_to_string(ptr: *const std::os::raw::c_char, label: &str) -> String {
+unsafe fn cstr_to_string(ptr: *const std::os::raw::c_char, _label: &str) -> String {
     unsafe {
         if ptr.is_null() {
             String::new() // caller should check — but we return a default

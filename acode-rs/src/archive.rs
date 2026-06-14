@@ -257,8 +257,8 @@ fn extract_tar<R: Read + Send + 'static>(
 
     let reader: Box<dyn Read> = create_decompressor(reader, format)?;
     let mut archive = tar::Archive::new(reader);
-    let mut extracted = Vec::new();
-    let mut skipped = Vec::new();
+    let mut extracted: Vec<String> = Vec::new();
+    let mut skipped: Vec<String> = Vec::new();
 
     // Count entries for progress
     let entries_result: Vec<_> = archive.entries()
@@ -430,7 +430,7 @@ pub fn compress_dir(
     let file = File::create(output_path)
         .map_err(|e| format!("Failed to create output file: {}", e))?;
     let writer = BufWriter::new(file);
-    compress_dir_to_writer(source_dir, writer, format, on_progress)
+    compress_dir_to_writer(source_dir, writer, &format, on_progress)
 }
 
 /// Compress a directory to in-memory bytes.
@@ -440,7 +440,7 @@ pub fn compress_dir_to_bytes(
 ) -> Result<Vec<u8>, String> {
     let mut buf = Vec::new();
     let cursor = io::Cursor::new(&mut buf);
-    compress_dir_to_writer(source_dir, cursor, format, None)?;
+    compress_dir_to_writer(source_dir, cursor, &format, None)?;
     Ok(buf)
 }
 

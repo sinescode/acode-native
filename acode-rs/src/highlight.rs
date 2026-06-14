@@ -75,7 +75,7 @@ pub fn highlight_code(code: &str, language: &str, theme: &str) -> Result<Highlig
     let syntax = find_syntax(ss, language)
         .ok_or_else(|| format!("unknown language: '{}'", language))?;
 
-    let theme = match theme {
+    let _theme = match theme {
         "dark" | "" => &ts.themes["base16-eighties.dark"],
         "light" => &ts.themes["base16-eighties.light"],
         name => ts.themes.get(name)
@@ -143,7 +143,7 @@ pub fn generate_theme_css(theme: &str) -> Result<String, String> {
     for scope in &theme.scopes {
         let selector: Vec<String> = scope.scope.selectors
             .iter()
-            .map(|s| format!(".{}", s.path.replace('.', "-").replace(' ', "-").to_lowercase()))
+            .map(|s| format!(".{}", s.path.to_string().replace('.', "-").replace(' ', "-").to_lowercase()))
             .collect();
         if selector.is_empty() { continue; }
         css.push_str(&format!("  .highlight {} {{\n", selector.join(", ")));
@@ -173,7 +173,7 @@ pub fn generate_theme_css(theme: &str) -> Result<String, String> {
 // Internal
 // ---------------------------------------------------------------------------
 
-fn find_syntax(ss: &syntect::parsing::SyntaxSet, name: &str) -> Option<&'static syntect::parsing::SyntaxReference> {
+fn find_syntax<'a>(ss: &'a syntect::parsing::SyntaxSet, name: &str) -> Option<&'a syntect::parsing::SyntaxReference> {
     let name_lower = name.to_lowercase();
 
     // Try exact name match first

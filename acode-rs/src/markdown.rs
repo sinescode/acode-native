@@ -100,7 +100,7 @@ pub fn render_markdown(text: &str, options: &MarkdownOptions) -> MarkdownResult 
         comrak_opts.extension.footnotes = true;
     }
     if options.header_anchors {
-        comrak_opts.extension.header_ids = Some("".to_string()); // empty = auto-generate
+        comrak_opts.extension.header_id_prefix = Some("".to_string()); // empty = auto-generate
     }
 
     // Security

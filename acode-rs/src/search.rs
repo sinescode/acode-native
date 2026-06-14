@@ -336,7 +336,7 @@ pub fn search_dir(
 
     let files_processed = AtomicUsize::new(0);
     let matches_found = AtomicUsize::new(0);
-    let results: Arc<Mutex<Vec<FileSearchResult>>> = Arc::new(Mutex::new(Vec::new()));
+    let _results: Arc<Mutex<Vec<FileSearchResult>>> = Arc::new(Mutex::new(Vec::new()));
 
     // --- Parallel search via rayon ---
     use rayon::prelude::*;
@@ -345,7 +345,7 @@ pub fn search_dir(
     // regex::Regex is Sync, so we can share it
     let regex = &regex;
     let context_chars = options.context_chars;
-    let root = root_dir.to_path_buf();
+    let _root = root_dir.to_path_buf();
 
     let chunk_results: Vec<Vec<FileSearchResult>> = paths
         .par_chunks(64) // chunk to reduce lock contention

@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::{self, Read, Write};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -202,7 +202,7 @@ pub fn read_file_text(path: &Path, encoding: Option<&str>) -> Result<String, Str
 /// Equivalent to: `await fsOperation(url).writeFile(data, encoding)`
 pub fn write_file(path: &Path, content: &[u8]) -> Result<(), String> {
     // Atomic write: write to temp file, then rename
-    let parent = path.parent().unwrap_or(Path::new("."));
+    let _parent = path.parent().unwrap_or(Path::new("."));
     let tmp = temp_path(path);
 
     {

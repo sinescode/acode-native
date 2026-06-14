@@ -194,7 +194,8 @@ fn diff_with_inline(old: &str, new: &str, context: usize) -> DiffResult {
 /// Generate a unified diff patch string directly.
 pub fn unified_diff(old: &str, new: &str, old_label: Option<&str>, new_label: Option<&str>, context: usize) -> String {
     let text_diff = TextDiff::from_lines(old, new);
-    let mut diff = text_diff.unified_diff().context_radius(context);
+    let unified = text_diff.unified_diff();
+    let mut diff = unified.context_radius(context);
     let old_lbl = old_label.unwrap_or("");
     let new_lbl = new_label.unwrap_or("");
     diff.header(old_lbl, new_lbl);

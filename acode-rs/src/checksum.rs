@@ -6,7 +6,7 @@
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::Read;
 use std::path::Path;
 
 fn digest_to_hex(digest: &[u8]) -> String {
