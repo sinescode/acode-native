@@ -57,12 +57,17 @@ jobs:
       - name: Verify .so architecture
         run: |
           echo "=== ${{ matrix.lib_dir }}/libacode_native.so ==="
-          file target-android/${{ matrix.lib_dir }}/libacode_native.so
-          ls -lh target-android/${{ matrix.lib_dir }}/libacode_native.so
+          file target-android/${{ matrix.lib_dir }}/jniLibs/${{ matrix.abi }}/libacode_native.so
+          ls -lh target-android/${{ matrix.lib_dir }}/jniLibs/${{ matrix.abi }}/libacode_native.so
+
+      - name: Flatten .so for artifact upload
+        run: |
+          mkdir -p output/${{ matrix.lib_dir }}
+          cp target-android/${{ matrix.lib_dir }}/jniLibs/${{ matrix.abi }}/libacode_native.so output/${{ matrix.lib_dir }}/
 
       - name: Upload Rust artifact (${{ matrix.lib_dir }})
         uses: actions/upload-artifact@v7
         with:
           name: rust-${{ matrix.lib_dir }}
-          path: target-android/${{ matrix.lib_dir }}/libacode_native.so
+          path: output/${{ matrix.lib_dir }}/libacode_native.so
           retention-days: 7
