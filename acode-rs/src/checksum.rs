@@ -9,6 +9,10 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
+fn digest_to_hex(digest: &[u8]) -> String {
+    digest.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -51,7 +55,7 @@ pub fn hash_file(path: &Path) -> Result<HashResult, String> {
     }
 
     let digest = hasher.finalize();
-    let hex = format!("{:x}", digest);
+    let hex = digest_to_hex(&digest);
 
     Ok(HashResult {
         hex,
@@ -67,7 +71,7 @@ pub fn hash_bytes(data: &[u8]) -> HashResult {
     let digest = hasher.finalize();
 
     HashResult {
-        hex: format!("{:x}", digest),
+        hex: digest_to_hex(&digest),
         bytes: digest.to_vec(),
         input_size: data.len() as u64,
     }

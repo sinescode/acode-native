@@ -72,8 +72,8 @@ pub fn sanitize_html(html: &str, profile: &str) -> SanitizeResult {
                 .add_generic_attributes(std::collections::HashSet::from([
                     "class", "id", "title", "lang", "dir",
                 ]))
-                .add_tags_absolute(std::collections::HashSet::from(["a"]))
-                .add_tags_absolute(std::collections::HashSet::from(["img"]))
+                .add_tag_attributes("a", &["href", "target", "rel"])
+                .add_tag_attributes("img", &["src", "alt", "width", "height"])
                 .link_rel(Some("noopener noreferrer"))
                 .add_allowed_classes("span", &["tok-*", "hl-*", "cm-*"])
                 // GitHub alert classes

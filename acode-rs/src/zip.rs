@@ -69,14 +69,6 @@ pub fn sanitize_zip_path(path: &str) -> Option<String> {
         return Some(String::new());
     }
 
-    let s = path.replace('\\', "/");
-
-    // Remove URL-like schemes
-    let s = s.replace(
-        |c: char| c.is_ascii_alphabetic(),
-        "",
-    );
-    // Actually let's do this properly:
     let mut s = path.replace('\\', "/");
 
     // Strip leading slashes
@@ -140,7 +132,8 @@ pub fn is_unsafe_path(path: &str) -> bool {
     }
 
     // Dot-dot segments
-    let parts: Vec<&str> = s.replace('\\', "/").split('/').collect();
+    let normalized = s.replace('\\', "/");
+    let parts: Vec<&str> = normalized.split('/').collect();
     parts.contains(&"..")
 }
 
@@ -180,7 +173,6 @@ pub fn extract_zip(
 
         // Safety check
         if is_unsafe_path(&raw_name) {
-            skipped.push(raw_name);
             if let Some(ref cb) = on_progress {
                 cb(ZipProgress {
                     current_file: raw_name.clone(),
@@ -191,6 +183,7 @@ pub fn extract_zip(
                     percent: ((i + 1) as f64 / total as f64 * 100.0) as u32,
                 });
             }
+            skipped.push(raw_name);
             continue;
         }
 

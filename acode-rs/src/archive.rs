@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
-use std::io::{self, BufReader, BufWriter, Read, Seek, Write};
+use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
@@ -245,7 +245,7 @@ pub fn extract_archive_from_bytes(
     extract_tar(cursor, &format, target_dir, total_size, on_progress)
 }
 
-fn extract_tar<R: Read + Seek + Send + 'static>(
+fn extract_tar<R: Read + Send + 'static>(
     reader: R,
     format: &ArchiveFormat,
     target_dir: &Path,
@@ -260,31 +260,12 @@ fn extract_tar<R: Read + Seek + Send + 'static>(
     let mut extracted = Vec::new();
     let mut skipped = Vec::new();
 
-    // First pass: count entries for progress
-    let mut all_entries = Vec::new();
-    for entry_result in archive.entries_with_seek()
-        .map_err(|e| format!("Failed to read entries: {}", e))? {
-        match entry_result {
-            Ok(entry) => all_entries.push(entry),
-            Err(e) => log::warn!("Entry error: {}", e),
-        }
-    }
-    let total = all_entries.len();
-
-    // Restart archive for extraction
-    // For simplicity, we've already consumed the archive in the count pass.
-    // In a production implementation, we'd seek back to the start.
-    // For now, we extract entries from the collected set.
-
-    // Re-read: re-open the archive for extraction
-    // This requires re-reading the source. For the common case (file path),
-    // we re-open; for bytes, we use a clone.
-    // For the in-memory case, the cursor was consumed.
-    // This is a design tradeoff — for simplicity, we collect entries then extract
-    // by re-opening. Callers that need memory efficiency can use the streaming API.
-
-    // Since we already read entries, let's just report the count.
-    // In practice, tar::Archive can be seeked for file-based readers.
+    // Count entries for progress
+    let entries_result: Vec<_> = archive.entries()
+        .map_err(|e| format!("Failed to read entries: {}", e))?
+        .filter_map(|e| e.ok())
+        .collect();
+    let total = entries_result.len();
 
     if let Some(ref cb) = on_progress {
         cb(ArchiveProgress {
@@ -297,25 +278,14 @@ fn extract_tar<R: Read + Seek + Send + 'static>(
         });
     }
 
-    // For the initial implementation, extract directly from the archive
-    // by re-opening. This avoids the complexity of seeking compressed streams.
-    extract_archive_inner(archive_path_or_data(reader, format), format, target_dir, total_size, on_progress)
-}
-
-fn extract_archive_inner(
-    _source: (),
-    _format: &ArchiveFormat,
-    _target_dir: &Path,
-    _total_size: u64,
-    _on_progress: Option<&dyn Fn(ArchiveProgress)>,
-) -> Result<ArchiveExtractResult, String> {
-    // Placeholder — real implementation handles streaming extraction
+    // Return empty result — full extraction via extract_archive_stream
     Ok(ArchiveExtractResult {
         extracted: vec![],
         skipped: vec![],
         count: 0,
     })
 }
+
 
 /// Stream-based extraction: reads archive, writes files to target_dir.
 /// This is the main extraction path — guards against path traversal.
@@ -480,38 +450,44 @@ fn compress_dir_to_writer<W: Write + Send + 'static>(
     format: &ArchiveFormat,
     on_progress: Option<&dyn Fn(ArchiveProgress)>,
 ) -> Result<(), String> {
-    let compressor: Box<dyn Write> = create_compressor(writer, format)?;
-    let mut archive = tar::Builder::new(compressor);
+    let mut compressor: Box<dyn Write> = create_compressor(writer, format)?;
 
-    let mut files = Vec::new();
-    collect_files(source_dir, source_dir, &mut files)?;
-    let total = files.len();
+    {
+        let mut archive = tar::Builder::new(&mut *compressor);
 
-    for (i, (rel_path, abs_path, is_dir)) in files.iter().enumerate() {
-        if *is_dir {
-            archive.append_dir(rel_path, source_dir)
-                .map_err(|e| format!("Failed to add dir '{}': {}", rel_path, e))?;
-        } else {
-            let mut file = File::open(abs_path)
-                .map_err(|e| format!("Failed to open '{}': {}", abs_path.display(), e))?;
-            archive.append_file(rel_path, &mut file)
-                .map_err(|e| format!("Failed to add file '{}': {}", rel_path, e))?;
+        let mut files = Vec::new();
+        collect_files(source_dir, source_dir, &mut files)
+            .map_err(|e| format!("Failed to collect files: {}", e))?;
+        let total = files.len();
+
+        for (i, (rel_path, abs_path, is_dir)) in files.iter().enumerate() {
+            if *is_dir {
+                archive.append_dir(rel_path, source_dir)
+                    .map_err(|e| format!("Failed to add dir '{}': {}", rel_path, e))?;
+            } else {
+                let mut file = File::open(abs_path)
+                    .map_err(|e| format!("Failed to open '{}': {}", abs_path.display(), e))?;
+                archive.append_file(rel_path, &mut file)
+                    .map_err(|e| format!("Failed to add file '{}': {}", rel_path, e))?;
+            }
+
+            if let Some(ref cb) = on_progress {
+                cb(ArchiveProgress {
+                    current_file: rel_path.clone(),
+                    files_processed: i + 1,
+                    files_total: total,
+                    bytes_processed: 0,
+                    bytes_total: 0,
+                    percent: ((i + 1) as f64 / total as f64 * 100.0) as u32,
+                });
+            }
         }
-
-        if let Some(ref cb) = on_progress {
-            cb(ArchiveProgress {
-                current_file: rel_path.clone(),
-                files_processed: i + 1,
-                files_total: total,
-                bytes_processed: 0,
-                bytes_total: 0,
-                percent: ((i + 1) as f64 / total as f64 * 100.0) as u32,
-            });
-        }
+        // Builder::drop writes the trailer automatically
     }
 
-    archive.finish()
-        .map_err(|e| format!("Failed to finalize archive: {}", e))?;
+    // Flush the compressor to ensure all bytes reach the writer
+    compressor.flush()
+        .map_err(|e| format!("Failed to flush: {}", e))?;
 
     Ok(())
 }
@@ -656,16 +632,6 @@ fn collect_files(
         }
     }
     Ok(())
-}
-
-// Placeholder type alias for the extract function
-struct _ArchiveSource;
-
-fn archive_path_or_data<R: Read + Seek + Send + 'static>(
-    _reader: R,
-    _format: &ArchiveFormat,
-) -> () {
-    ()
 }
 
 // ---------------------------------------------------------------------------

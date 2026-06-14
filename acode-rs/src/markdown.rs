@@ -104,7 +104,7 @@ pub fn render_markdown(text: &str, options: &MarkdownOptions) -> MarkdownResult 
     }
 
     // Security
-    comrak_opts.render.unsafe_ = !options.escape_html;
+    comrak_opts.render.r#unsafe = !options.escape_html;
 
     // Detect math/mermaid before rendering (so the caller knows whether to
     // lazy-load KaTeX or Mermaid)

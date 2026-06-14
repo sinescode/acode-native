@@ -45,7 +45,7 @@ pub struct DiffResult {
     /// Number of deleted lines
     pub deletions: usize,
     /// Edit distance score (0.0 = identical, 1.0 = completely different)
-    pub similarity: f64,
+    pub similarity: f32,
     /// Unified diff format string
     pub unified: String,
 }
@@ -195,8 +195,9 @@ fn diff_with_inline(old: &str, new: &str, context: usize) -> DiffResult {
 pub fn unified_diff(old: &str, new: &str, old_label: Option<&str>, new_label: Option<&str>, context: usize) -> String {
     let text_diff = TextDiff::from_lines(old, new);
     let mut diff = text_diff.unified_diff().context_radius(context);
-    if let Some(label) = old_label { diff.header_old(label); }
-    if let Some(label) = new_label { diff.header_new(label); }
+    let old_lbl = old_label.unwrap_or("");
+    let new_lbl = new_label.unwrap_or("");
+    diff.header(old_lbl, new_lbl);
 
     let mut buf = Vec::new();
     diff.to_writer(&mut buf).ok();

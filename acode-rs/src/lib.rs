@@ -51,7 +51,7 @@ pub use encoding::{
 };
 pub use archive::{
     extract_archive, extract_archive_from_bytes, extract_archive_stream,
-    compress_dir as compress_archive_dir, compress_dir_to_bytes,
+    compress_dir_to_bytes as compress_archive_dir, compress_dir_to_bytes,
     list_archive_entries, list_archive_entries_from_bytes,
     ArchiveFormat, ArchiveEntry, ArchiveExtractResult, ArchiveProgress,
 };

@@ -85,11 +85,11 @@ pub fn highlight_code(code: &str, language: &str, theme: &str) -> Result<Highlig
     let mut highlighter = syntect::html::ClassedHTMLGenerator::new_with_class_style(
         syntax,
         ss,
-        syntect::highlighting::ClassStyle::Spaced,
+        syntect::html::ClassStyle::Spaced,
     );
 
     for line in code.lines() {
-        highlighter.parse_html_line_include_newline(line)
+        highlighter.parse_html_for_line_which_includes_newline(line)
             .map_err(|e| format!("highlight error: {}", e))?;
     }
 
@@ -141,7 +141,7 @@ pub fn generate_theme_css(theme: &str) -> Result<String, String> {
 
     // Syntax scopes
     for scope in &theme.scopes {
-        let selector: Vec<String> = scope.scope
+        let selector: Vec<String> = scope.scope.selectors
             .iter()
             .map(|s| format!(".{}", s.path.replace('.', "-").replace(' ', "-").to_lowercase()))
             .collect();
@@ -153,13 +153,13 @@ pub fn generate_theme_css(theme: &str) -> Result<String, String> {
         if let Some(bg) = &scope.style.background {
             css.push_str(&format!("    background-color: #{:02x}{:02x}{:02x};\n", bg.r, bg.g, bg.b));
         }
-        if scope.style.font_style.contains(syntect::highlighting::FontStyle::BOLD) {
+        if scope.style.font_style.is_some_and(|fs| fs.contains(syntect::highlighting::FontStyle::BOLD)) {
             css.push_str("    font-weight: bold;\n");
         }
-        if scope.style.font_style.contains(syntect::highlighting::FontStyle::ITALIC) {
+        if scope.style.font_style.is_some_and(|fs| fs.contains(syntect::highlighting::FontStyle::ITALIC)) {
             css.push_str("    font-style: italic;\n");
         }
-        if scope.style.font_style.contains(syntect::highlighting::FontStyle::UNDERLINE) {
+        if scope.style.font_style.is_some_and(|fs| fs.contains(syntect::highlighting::FontStyle::UNDERLINE)) {
             css.push_str("    text-decoration: underline;\n");
         }
         css.push_str("  }\n");

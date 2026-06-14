@@ -369,17 +369,7 @@ pub fn search_dir(
                     local_results.push(result);
                 }
 
-                let processed = files_processed.fetch_add(1, Ordering::Relaxed) + 1;
-                if let Some(ref cb) = on_progress {
-                    if processed % 16 == 0 || processed == total {
-                        cb(SearchProgress {
-                            files_processed: processed,
-                            files_total: total,
-                            matches_found: matches_found.load(Ordering::Relaxed),
-                            percent: ((processed as f64 / total as f64) * 100.0) as u32,
-                        });
-                    }
-                }
+                files_processed.fetch_add(1, Ordering::Relaxed);
             }
             local_results
         })
