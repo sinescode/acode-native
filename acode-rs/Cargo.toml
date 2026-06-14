@@ -30,7 +30,7 @@ zip = { version = "2", default-features = false, features = ["deflate", "bzip2",
 # --- Archive (tar, tar.gz, tar.bz2, tar.xz, tar.zst) ---
 tar = "0.4"
 flate2 = "1"
-bzip2 = "0.4"
+bzip2 = "0.6"
 xz2 = "0.1"
 zstd = "0.13"
 
