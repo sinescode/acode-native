@@ -25,7 +25,7 @@ memchr = "2"
 similar = { version = "3", features = ["text", "inline", "unicode"] }
 
 # --- Zip (fast extract/compress, replacing JSZip) ---
-zip = { version = "2", default-features = false, features = ["deflate", "bzip2", "zstd", "time"] }
+zip = { version = "8", default-features = false, features = ["deflate", "bzip2", "zstd", "time"] }
 
 # --- Archive (tar, tar.gz, tar.bz2, tar.xz, tar.zst) ---
 tar = "0.4"

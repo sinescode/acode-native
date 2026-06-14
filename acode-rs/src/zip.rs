@@ -12,7 +12,7 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use zip::read::ZipArchive;
-use zip::write::{FileOptions, ZipWriter};
+use zip::write::{SimpleFileOptions, ZipWriter};
 use zip::CompressionMethod;
 
 // ---------------------------------------------------------------------------
@@ -269,7 +269,7 @@ pub fn list_zip_entries(zip_bytes: &[u8]) -> Result<Vec<ZipEntry>, String> {
             compressed_size: entry.compressed_size(),
             last_modified: entry.last_modified()
                 .map(|dt| dt.to_string()),
-            comment: String::from_utf8_lossy(entry.comment()).to_string(),
+            comment: entry.comment().to_string(),
         });
     }
 
@@ -315,7 +315,7 @@ pub fn compress_dir(
     let mut buf = Vec::new();
     let mut zip = ZipWriter::new(io::Cursor::new(&mut buf));
 
-    let options = FileOptions::default()
+    let options = SimpleFileOptions::default()
         .compression_method(match compression {
             CompressionLevel::Store => CompressionMethod::Stored,
             CompressionLevel::Deflate => CompressionMethod::Deflated,
@@ -405,7 +405,7 @@ mod tests {
     fn make_test_zip() -> Vec<u8> {
         let mut buf = Vec::new();
         let mut zip = ZipWriter::new(io::Cursor::new(&mut buf));
-        let opts = FileOptions::default()
+        let opts = SimpleFileOptions::default()
             .compression_method(CompressionMethod::Deflated);
         zip.start_file("plugin.json", opts).unwrap();
         zip.write_all(b"{\"id\":\"test\"}").unwrap();
