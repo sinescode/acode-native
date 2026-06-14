@@ -130,7 +130,7 @@ jobs:
           FEATURES="${{ inputs.features || 'fs,search,diff,zip,archive,encoding,checksum,markdown,highlight,color,sanitize' }}"
           cargo ndk \
             -t ${{ matrix.triple }} \
-            -p 26 \
+            --platform 26 \
             -o ../target-android/${{ matrix.lib_dir }} \
             build --release --features "$FEATURES"
 
