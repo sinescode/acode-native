@@ -1,0 +1,15 @@
+{
+  "name": "com.foxdebug.acode.acode-native",
+  "version": "0.2.0",
+  "description": "High-performance native modules (search, diff, zip, checksum) backed by Rust FFI",
+  "cordova": {
+    "id": "com.foxdebug.acode.acode-native",
+    "platforms": ["android"]
+  },
+  "keywords": [
+    "ecosystem:cordova",
+    "cordova-android"
+  ],
+  "author": "Acode Contributors",
+  "license": "MIT"
+}

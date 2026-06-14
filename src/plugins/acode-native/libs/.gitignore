@@ -1,0 +1,2 @@
+# CI places libacode_native.so here. Never commit .so files.
+*.so

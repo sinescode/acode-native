@@ -1,0 +1,68 @@
+# Standalone workflow: cross-compile acode-rs for Android.
+# Produces libacode_native.so artifacts for 3 ABIs.
+# Can be triggered independently (on acode-rs changes) or called by APK build workflows.
+
+name: Build Rust Native Libraries (Android)
+
+on:
+  workflow_dispatch:
+  workflow_call:  # allows reuse from other workflows
+  push:
+    paths:
+      - 'acode-rs/**'
+      - '.github/workflows/build-rust-android.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-rust:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - triple: aarch64-linux-android
+            abi: arm64-v8a
+            lib_dir: arm64
+          - triple: armv7-linux-androideabi
+            abi: armeabi-v7a
+            lib_dir: arm32
+          - triple: x86_64-linux-android
+            abi: x86_64
+            lib_dir: x64
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.triple }}
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+
+      - name: Build .so for ${{ matrix.triple }}
+        working-directory: acode-rs
+        run: |
+          cargo ndk \
+            --target ${{ matrix.triple }} \
+            --platform 26 \
+            -- output-dir ../target-android/${{ matrix.lib_dir }} \
+            build --release --features fs,search,diff,zip,archive,encoding,checksum,markdown,highlight,color,sanitize
+
+      - name: Verify .so architecture
+        run: |
+          echo "=== ${{ matrix.lib_dir }}/libacode_native.so ==="
+          file target-android/${{ matrix.lib_dir }}/libacode_native.so
+          ls -lh target-android/${{ matrix.lib_dir }}/libacode_native.so
+
+      - name: Upload Rust artifact (${{ matrix.lib_dir }})
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust-${{ matrix.lib_dir }}
+          path: target-android/${{ matrix.lib_dir }}/libacode_native.so
+          retention-days: 7

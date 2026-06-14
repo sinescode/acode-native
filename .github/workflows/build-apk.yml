@@ -1,0 +1,325 @@
+# Build Acode APK — Rust cross-compile + Cordova Android APK.
+#
+# Two modes:
+#   Full (default):  Cross-compile acode-rs → integrate .so → build APK
+#   Quick:           Skip Rust, build APK with JS-only fallback (no native .so)
+#
+# Triggered: manually (workflow_dispatch), on push to acode-rs/ or plugin,
+#             or called from other workflows (workflow_call).
+
+name: Build Acode APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'App variant'
+        type: choice
+        default: 'paid'
+        options: [paid, free]
+      build_type:
+        description: 'Build type'
+        type: choice
+        default: 'debug'
+        options: [debug, release]
+      package_type:
+        description: 'Output format'
+        type: choice
+        default: 'apk'
+        options: [apk, bundle]
+      skip_rust:
+        description: 'Skip Rust native build (JS-only fallback)'
+        type: boolean
+        default: false
+      features:
+        description: 'Rust cargo features (comma-separated)'
+        type: string
+        default: 'fs,search,diff,zip,archive,encoding,checksum,markdown,highlight,color,sanitize'
+
+  workflow_call:
+    inputs:
+      variant:
+        type: string
+        default: 'paid'
+      build_type:
+        type: string
+        default: 'debug'
+      package_type:
+        type: string
+        default: 'apk'
+      skip_rust:
+        type: boolean
+        default: false
+      features:
+        type: string
+        default: 'fs,search,diff,zip,archive,encoding,checksum,markdown,highlight,color,sanitize'
+    outputs:
+      apk_artifact_name:
+        value: ${{ jobs.build-apk.outputs.artifact_name }}
+      version:
+        value: ${{ jobs.build-apk.outputs.version }}
+
+  push:
+    paths:
+      - 'acode-rs/**'
+      - 'src/plugins/acode-native/**'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 5
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+
+# ─── Jobs ─────────────────────────────────────────────────────────────────────
+
+jobs:
+  # -------------------------------------------------------------------
+  # Job 1: Cross-compile Rust for 3 Android ABIs (skip if skip_rust)
+  # -------------------------------------------------------------------
+  build-rust:
+    if: ${{ ! inputs.skip_rust }}
+    timeout-minutes: 40
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - triple: aarch64-linux-android
+            abi: arm64-v8a
+            lib_dir: arm64
+          - triple: armv7-linux-androideabi
+            abi: armeabi-v7a
+            lib_dir: arm32
+          - triple: x86_64-linux-android
+            abi: x86_64
+            lib_dir: x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.triple }}
+
+      - name: Cache Rust build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            acode-rs/target/
+          key: rust-android-${{ matrix.triple }}-${{ hashFiles('acode-rs/Cargo.lock', 'acode-rs/Cargo.toml') }}
+          restore-keys: |
+            rust-android-${{ matrix.triple }}-
+            rust-android-
+
+      - name: Install cargo-ndk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+
+      - name: Build .so for ${{ matrix.triple }}
+        working-directory: acode-rs
+        run: |
+          FEATURES="${{ inputs.features || 'fs,search,diff,zip,archive,encoding,checksum,markdown,highlight,color,sanitize' }}"
+          cargo ndk \
+            --target ${{ matrix.triple }} \
+            --platform 26 \
+            -- output-dir ../target-android/${{ matrix.lib_dir }} \
+            build --release --features "$FEATURES"
+
+      - name: Verify .so
+        run: |
+          echo "=== ${{ matrix.lib_dir }}/libacode_native.so ==="
+          file "target-android/${{ matrix.lib_dir }}/libacode_native.so"
+          ls -lh "target-android/${{ matrix.lib_dir }}/libacode_native.so"
+
+      - name: Upload Rust artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust-${{ matrix.lib_dir }}
+          path: target-android/${{ matrix.lib_dir }}/libacode_native.so
+          retention-days: 7
+
+  # -------------------------------------------------------------------
+  # Job 2: Build Cordova Android APK
+  # -------------------------------------------------------------------
+  build-apk:
+    needs: ${{ ! inputs.skip_rust && 'build-rust' || null }}
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_name: apk-${{ steps.meta.outputs.version }}-${{ steps.meta.outputs.variant }}
+      version: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # --- Toolchain ---
+      - name: Setup Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+          cache: npm
+
+      # --- Download Rust .so artifacts (if not skipping) ---
+      - name: Download Rust .so (arm64)
+        if: ${{ ! inputs.skip_rust }}
+        uses: actions/download-artifact@v7
+        with:
+          name: rust-arm64
+          path: src/plugins/acode-native/libs/arm64/
+
+      - name: Download Rust .so (arm32)
+        if: ${{ ! inputs.skip_rust }}
+        uses: actions/download-artifact@v7
+        with:
+          name: rust-arm32
+          path: src/plugins/acode-native/libs/arm32/
+
+      - name: Download Rust .so (x64)
+        if: ${{ ! inputs.skip_rust }}
+        uses: actions/download-artifact@v7
+        with:
+          name: rust-x64
+          path: src/plugins/acode-native/libs/x64/
+
+      - name: Verify native libraries
+        if: ${{ ! inputs.skip_rust }}
+        run: |
+          set -e
+          for abi in arm64 arm32 x64; do
+            lib="src/plugins/acode-native/libs/${abi}/libacode_native.so"
+            if [ -f "$lib" ]; then
+              echo "✓ ${abi}: $(file "$lib" | cut -d: -f2) ($(ls -lh "$lib" | awk '{print $5}'))"
+            else
+              echo "✗ ${abi}: MISSING"
+              exit 1
+            fi
+          done
+
+      # --- Setup signing for release builds ---
+      - name: Setup release signing
+        if: ${{ inputs.build_type == 'release' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::KEYSTORE_BASE64 secret is required for release builds"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > /tmp/release.keystore
+          cat > build.json << EOFBUILD
+          {
+            "android": {
+              "release": {
+                "keystore": "/tmp/release.keystore",
+                "storePassword": "${KEYSTORE_PASSWORD}",
+                "alias": "${KEY_ALIAS}",
+                "password": "${KEY_PASSWORD}",
+                "keystoreType": ""
+              }
+            }
+          }
+          EOFBUILD
+          echo "✓ Release signing configured"
+
+      # --- Build ---
+      - name: Install npm dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Cordova CLI
+        run: npm install -g cordova
+
+      - name: Run npm setup
+        run: npm run setup
+
+      - name: Extract version metadata
+        id: meta
+        run: |
+          VERSION=$(grep -oP 'version="\K[0-9.]+' config.xml | head -1)
+          VERSION_CODE=$(grep -oP 'android-versionCode="\K[0-9]+' config.xml)
+          VARIANT="${{ inputs.variant || 'paid' }}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "versionCode=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
+          echo "variant=${VARIANT}" >> "$GITHUB_OUTPUT"
+          echo "::notice::Acode v${VERSION} (code ${VERSION_CODE}) — ${VARIANT}"
+
+      - name: Run storage manager
+        run: node utils/storage_manager.mjs y
+
+      - name: Build APK
+        run: |
+          npm run build \
+            ${{ inputs.variant || 'paid' }} \
+            ${{ inputs.build_type == 'release' && 'prod' || 'dev' }} \
+            ${{ inputs.package_type || 'apk' }}
+
+      - name: Locate built artifacts
+        id: artifacts
+        run: |
+          echo "=== APK files ==="
+          find platforms/android -name '*.apk' -exec ls -lh {} \;
+          echo "=== AAB files ==="
+          find platforms/android -name '*.aab' -exec ls -lh {} \; 2>/dev/null || echo "(none)"
+
+          APK=$(find platforms/android -name '*.apk' | head -1)
+          if [ -z "$APK" ]; then
+            echo "::error::No APK found after build"
+            exit 1
+          fi
+          echo "apk_path=${APK}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify .so in APK
+        if: ${{ ! inputs.skip_rust }}
+        run: |
+          APK=$(find platforms/android -name '*.apk' | head -1)
+          echo "Checking for libacode_native.so in APK..."
+          if unzip -l "$APK" | grep -q libacode_native; then
+            echo "✓ libacode_native.so present in APK"
+            unzip -l "$APK" | grep libacode_native
+          else
+            echo "::warning::libacode_native.so NOT found in APK — JS fallback will be used"
+          fi
+
+      # --- Upload ---
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.meta.outputs.variant }}-${{ steps.meta.outputs.version }}-${{ inputs.build_type || 'debug' }}
+          path: |
+            platforms/android/app/build/outputs/apk/**/*.apk
+            platforms/android/app/build/outputs/bundle/**/*.aab
+          retention-days: 30
+
+      - name: Upload build summary
+        run: |
+          {
+            echo "## Acode APK Build"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Version | ${{ steps.meta.outputs.version }} |"
+            echo "| Variant | ${{ steps.meta.outputs.variant }} |"
+            echo "| Build type | ${{ inputs.build_type || 'debug' }} |"
+            echo "| Rust native | ${{ ! inputs.skip_rust && '✓ enabled' || '✗ skipped (JS fallback)' }} |"
+            echo "| Commit | ${{ github.sha }} |"
+            echo ""
+            echo "[📦 Download APK](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          } >> "$GITHUB_STEP_SUMMARY"

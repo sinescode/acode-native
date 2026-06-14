@@ -1,0 +1,2 @@
+# This directory receives libacode_native.so (x86_64) from CI.
+# Do not commit .so files — they are build artifacts placed by GitHub Actions.

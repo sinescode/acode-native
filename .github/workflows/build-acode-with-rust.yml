@@ -1,0 +1,171 @@
+# Full-stack CI: Rust cross-compile → .so artifacts → Cordova APK build.
+# This workflow produces an Acode APK with the acode_native Rust library integrated.
+#
+# Triggered manually (workflow_dispatch) or on push to acode-rs/.
+# For the regular nightly build, the build-rust job is called as a dependency.
+
+name: Build Acode APK with Rust
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Build variant'
+        type: choice
+        default: 'paid'
+        options:
+          - paid
+          - free
+      package_type:
+        description: 'Output format'
+        type: choice
+        default: 'apk'
+        options:
+          - apk
+          - bundle
+  push:
+    paths:
+      - 'acode-rs/**'
+      - 'src/plugins/acode-native/**'
+      - '.github/workflows/build-acode-with-rust.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  # -------------------------------------------------------------------
+  # Job 1: Cross-compile Rust for 3 Android ABIs
+  # -------------------------------------------------------------------
+  build-rust:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - triple: aarch64-linux-android
+            abi: arm64-v8a
+            lib_dir: arm64
+          - triple: armv7-linux-androideabi
+            abi: armeabi-v7a
+            lib_dir: arm32
+          - triple: x86_64-linux-android
+            abi: x86_64
+            lib_dir: x64
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.triple }}
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+
+      - name: Build .so for ${{ matrix.triple }}
+        working-directory: acode-rs
+        run: |
+          cargo ndk \
+            --target ${{ matrix.triple }} \
+            --platform 26 \
+            -- output-dir ../target-android/${{ matrix.lib_dir }} \
+            build --release --features fs,search,diff,zip,archive,encoding,checksum,markdown,highlight,color,sanitize
+
+      - name: Verify .so
+        run: |
+          file target-android/${{ matrix.lib_dir }}/libacode_native.so
+          ls -lh target-android/${{ matrix.lib_dir }}/libacode_native.so
+
+      - name: Upload artifact (rust-${{ matrix.lib_dir }})
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust-${{ matrix.lib_dir }}
+          path: target-android/${{ matrix.lib_dir }}/libacode_native.so
+          retention-days: 7
+
+  # -------------------------------------------------------------------
+  # Job 2: Build the Cordova Android APK with Rust .so integrated
+  # -------------------------------------------------------------------
+  build-apk:
+    needs: build-rust
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+
+      # --- Download Rust .so artifacts into the plugin libs/ directories ---
+      - name: Download Rust .so (arm64)
+        uses: actions/download-artifact@v7
+        with:
+          name: rust-arm64
+          path: src/plugins/acode-native/libs/arm64/
+
+      - name: Download Rust .so (arm32)
+        uses: actions/download-artifact@v7
+        with:
+          name: rust-arm32
+          path: src/plugins/acode-native/libs/arm32/
+
+      - name: Download Rust .so (x64)
+        uses: actions/download-artifact@v7
+        with:
+          name: rust-x64
+          path: src/plugins/acode-native/libs/x64/
+
+      - name: Verify native libraries in place
+        run: |
+          echo "=== arm64-v8a ==="
+          file src/plugins/acode-native/libs/arm64/libacode_native.so || echo "MISSING!"
+          echo "=== armeabi-v7a ==="
+          file src/plugins/acode-native/libs/arm32/libacode_native.so || echo "MISSING!"
+          echo "=== x86_64 ==="
+          file src/plugins/acode-native/libs/x64/libacode_native.so || echo "MISSING!"
+
+      # --- Standard Acode build ---
+      - name: Install Node.js Packages
+        run: npm install
+
+      - name: Install Cordova CLI
+        run: npm install -g cordova
+
+      - name: Run npm setup
+        run: npm run setup
+
+      - name: Build APK (${{ github.event.inputs.variant || 'paid' }})
+        run: |
+          node utils/storage_manager.mjs y
+          npm run build ${{ github.event.inputs.variant || 'paid' }} dev ${{ github.event.inputs.package_type || 'apk' }}
+
+      - name: Locate APK output
+        run: |
+          find platforms/android -name '*.apk' -o -name '*.aab' | head -20
+
+      - name: Verify .so files inside APK
+        run: |
+          APK=$(find platforms/android -name '*.apk' | head -1)
+          if [ -n "$APK" ]; then
+            echo "=== .so files in APK ==="
+            unzip -l "$APK" | grep libacode_native || echo "WARNING: libacode_native.so not found in APK!"
+          fi
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: acode-with-rust-${{ github.sha }}
+          path: platforms/android/app/build/outputs/apk/debug/*.apk

@@ -1,0 +1,92 @@
+[package]
+name = "acode-rs"
+version = "0.4.0"
+edition = "2021"
+description = "High-performance native modules for Acode editor — fs, search, diff, zip, archive, encoding, checksum, markdown, highlight, color, sanitize"
+license = "MIT"
+authors = ["Yaseen <simplenecessarycode@gmail.com>"]
+repository = "https://github.com/sinescode/acode-rs"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+name = "acode_native"
+
+[dependencies]
+# --- Filesystem (bulk ops replacing fsOperation + fileList) ---
+walkdir = "2"
+mime_guess = "2"
+
+# --- Search (ripgrep-style parallel file search) ---
+regex = "1"
+ignore = "0.4"
+memchr = "2"
+
+# --- Diff (fast text diffing) ---
+similar = { version = "2", features = ["text", "inline", "unicode"] }
+
+# --- Zip (fast extract/compress, replacing JSZip) ---
+zip = { version = "2", default-features = false, features = ["deflate", "bzip2", "zstd", "time"] }
+
+# --- Archive (tar, tar.gz, tar.bz2, tar.xz, tar.zst) ---
+tar = "0.4"
+flate2 = "1"
+bzip2 = "0.4"
+xz2 = "0.1"
+zstd = "0.13"
+
+# --- Encoding (chardetng replaces JS BOM+heuristic detection) ---
+chardetng = "0.1"
+
+# --- Checksum (SHA-256 with SIMD) ---
+sha2 = "0.10"
+hex = "0.4"
+
+# --- Highlight (syntect replaces Lezer codeHighlight.js) ---
+syntect = { version = "5", default-features = false, features = ["default-fancy", "parsing", "html", "regex-fancy"] }
+
+# --- Markdown (comrak replaces markdown-it) ---
+comrak = "0.29"
+
+# --- Sanitize (ammonia replaces DOMPurify) ---
+ammonia = "4"
+
+# --- Async runtime (for JNI async bridge) ---
+tokio = { version = "1", features = ["rt-multi-thread", "fs", "io-util", "sync"] }
+
+# --- Serialization (JSON results to JS) ---
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# --- Error handling ---
+thiserror = "2"
+
+# --- Logging ---
+log = "0.4"
+
+# --- FFI (base64 for binary data transfer across JNI boundary) ---
+libc = "0.2"
+base64 = "0.22"
+
+# --- Parallel iteration (search) ---
+rayon = "1"
+
+[features]
+default = ["fs", "search", "diff", "zip", "archive", "encoding", "checksum", "markdown", "highlight", "color", "sanitize"]
+fs = []
+search = []
+diff = []
+zip = []
+archive = []
+encoding = []
+checksum = []
+markdown = []
+highlight = []
+color = []
+sanitize = []
+jni = []
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = true

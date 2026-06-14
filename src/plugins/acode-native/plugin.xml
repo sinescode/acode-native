@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
+  xmlns:android="http://schemas.android.com/apk/res/android"
+  id="com.foxdebug.acode.acode-native" version="0.4.0">
+  <name>AcodeNative</name>
+  <description>High-performance native modules (fs, search, diff, zip, archive, encoding, checksum, markdown, highlight, color, sanitize) via Rust FFI</description>
+  <license>MIT</license>
+  <keywords>cordova,acode,native,rust</keywords>
+
+  <!-- JavaScript bridge module — exposes acode.native.* API -->
+  <js-module src="www/acode-native.js" name="AcodeNative">
+    <clobbers target="acode.native" />
+  </js-module>
+
+  <platform name="android">
+    <!-- Register feature with Cordova -->
+    <config-file target="res/xml/config.xml" parent="/*">
+      <feature name="AcodeNativePlugin">
+        <param name="android-package" value="com.foxdebug.acode.nativeplugin.AcodeNativePlugin" />
+      </feature>
+    </config-file>
+
+    <!-- Java JNI shim source -->
+    <source-file src="src/android/AcodeNativePlugin.java"
+      target-dir="src/com/foxdebug/acode/nativeplugin" />
+
+    <!-- Rust native library — arm64-v8a (modern phones 2015+) -->
+    <source-file src="libs/arm64/libacode_native.so" target-dir="libs/arm64-v8a" />
+
+    <!-- Rust native library — armeabi-v7a (older 32-bit ARM, ~5% devices) -->
+    <source-file src="libs/arm32/libacode_native.so" target-dir="libs/armeabi-v7a" />
+
+    <!-- Rust native library — x86_64 (emulators, Chromebooks) -->
+    <source-file src="libs/x64/libacode_native.so" target-dir="libs/x86_64" />
+  </platform>
+</plugin>
