@@ -130,18 +130,18 @@ pub fn detect_encoding(data: &[u8]) -> DetectionResult {
     }
 
     // Layer 2: chardetng statistical detection
-    let mut detector = chardetng::EncodingDetector::new();
+    let mut detector = chardetng::EncodingDetector::new(chardetng::Iso2022JpDetection::Allow);
     detector.feed(data, data.len() < 1024);
-    let (encoding_name, confident, _language) = detector.guess_assess(None, true);
+    let encoding_ref = detector.guess(None, chardetng::Utf8Detection::Allow);
+    let encoding = normalize_encoding_name(encoding_ref.name());
 
-    // Map chardetng names to Acode-compatible encoding names
-    let encoding = normalize_encoding_name(encoding_name);
-
+    let is_valid_utf8 = std::str::from_utf8(data).is_ok();
+    let confident = if encoding == "UTF-8" { is_valid_utf8 } else { true };
     let confidence = if confident { 0.95 } else { 0.6 };
 
     // Layer 3: Validate UTF-8 if detected as UTF-8
     if encoding == "UTF-8" && !confident {
-        if std::str::from_utf8(data).is_ok() {
+        if is_valid_utf8 {
             return DetectionResult {
                 encoding: "UTF-8".to_string(),
                 confidence: 0.9,
@@ -164,7 +164,7 @@ pub fn detect_encoding(data: &[u8]) -> DetectionResult {
     }
 
     // Layer 5: Fallback
-    if encoding.is_empty() || encoding == "UTF-8" && !std::str::from_utf8(data).is_ok() {
+    if encoding.is_empty() || encoding == "UTF-8" && !is_valid_utf8 {
         return DetectionResult {
             encoding: "windows-1252".to_string(),
             confidence: 0.3,
@@ -213,27 +213,26 @@ pub fn detect_encoding_with_hint(data: &[u8], lang_hint: Option<&str>) -> Detect
         };
     }
 
-    let top_domain = lang_hint
-        .map(|l| match l {
-            "ja" => chardetng::TopDomain::JA,
-            "zh" => chardetng::TopDomain::ZH,
-            "ko" => chardetng::TopDomain::KO,
-            "ru" => chardetng::TopDomain::RU,
-            "ar" => chardetng::TopDomain::AR,
-            "tr" => chardetng::TopDomain::TR,
-            "el" => chardetng::TopDomain::EL,
-            "he" => chardetng::TopDomain::HE,
-            "vi" => chardetng::TopDomain::VI,
-            "th" => chardetng::TopDomain::TH,
-            _ => chardetng::TopDomain::WIN,
-        })
-        .unwrap_or(chardetng::TopDomain::WIN);
+    let tld: Option<&[u8]> = lang_hint.map(|l| match l {
+        "ja" => b"jp" as &[u8],
+        "zh" => b"cn" as &[u8],
+        "ko" => b"kr" as &[u8],
+        "ru" => b"ru" as &[u8],
+        "ar" => b"sa" as &[u8],
+        "tr" => b"tr" as &[u8],
+        "el" => b"gr" as &[u8],
+        "he" => b"il" as &[u8],
+        "vi" => b"vn" as &[u8],
+        "th" => b"th" as &[u8],
+        _ => b"com" as &[u8],
+    });
 
-    let mut detector = chardetng::EncodingDetector::new();
+    let mut detector = chardetng::EncodingDetector::new(chardetng::Iso2022JpDetection::Allow);
     detector.feed(data, data.len() < 1024);
-    let (encoding_name, confident, _) = detector.guess_assess(Some(top_domain), true);
-
-    let encoding = normalize_encoding_name(encoding_name);
+    let encoding_ref = detector.guess(tld, chardetng::Utf8Detection::Allow);
+    let encoding = normalize_encoding_name(encoding_ref.name());
+    let is_valid_utf8 = std::str::from_utf8(data).is_ok();
+    let confident = if encoding == "UTF-8" { is_valid_utf8 } else { true };
     let confidence = if confident { 0.95 } else { 0.6 };
 
     DetectionResult {
