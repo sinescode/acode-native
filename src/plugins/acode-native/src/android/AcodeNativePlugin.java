@@ -10,6 +10,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import android.util.Base64;
 import android.util.Log;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Cordova plugin that bridges JavaScript to the acode_native Rust library via JNI.
@@ -210,7 +211,7 @@ public class AcodeNativePlugin extends CordovaPlugin {
                 return nativeHashFile(path);
             }
             case "hashBytes": {
-                byte[] data = args.getString(0).getBytes("UTF-8");
+                byte[] data = args.getString(0).getBytes(StandardCharsets.UTF_8);
                 return nativeHashBytes(data, data.length);
             }
 
