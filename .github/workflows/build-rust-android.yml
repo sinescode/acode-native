@@ -56,14 +56,21 @@ jobs:
 
       - name: Verify .so architecture
         run: |
-          echo "=== ${{ matrix.lib_dir }}/libacode_native.so ==="
-          file target-android/${{ matrix.lib_dir }}/jniLibs/${{ matrix.abi }}/libacode_native.so
-          ls -lh target-android/${{ matrix.lib_dir }}/jniLibs/${{ matrix.abi }}/libacode_native.so
+          echo "=== Finding libacode_native.so in target-android/${{ matrix.lib_dir }}/ ==="
+          find target-android/${{ matrix.lib_dir }}/ -name 'libacode_native.so' -exec file {} \; -exec ls -lh {} \;
+          echo "=== Full tree ==="
+          find target-android/ -name '*.so' 2>/dev/null || true
 
       - name: Flatten .so for artifact upload
         run: |
           mkdir -p output/${{ matrix.lib_dir }}
-          cp target-android/${{ matrix.lib_dir }}/jniLibs/${{ matrix.abi }}/libacode_native.so output/${{ matrix.lib_dir }}/
+          SO_FILE=$(find target-android/${{ matrix.lib_dir }}/ -name 'libacode_native.so' | head -1)
+          if [ -z "$SO_FILE" ]; then
+            echo "ERROR: libacode_native.so not found!"
+            find target-android/ -type f | head -30
+            exit 1
+          fi
+          cp "$SO_FILE" output/${{ matrix.lib_dir }}/
 
       - name: Upload Rust artifact (${{ matrix.lib_dir }})
         uses: actions/upload-artifact@v7
