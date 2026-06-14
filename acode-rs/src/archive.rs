@@ -440,8 +440,62 @@ pub fn compress_dir_to_bytes(
 ) -> Result<Vec<u8>, String> {
     let mut buf = Vec::new();
     let cursor = io::Cursor::new(&mut buf);
-    compress_dir_to_writer(source_dir, cursor, &format, None)?;
+    compress_dir_to_bytes_inner(source_dir, cursor, &format)?;
     Ok(buf)
+}
+
+/// In-memory compression that doesn't require 'static writer.
+fn compress_dir_to_bytes_inner<W: Write>(
+    source_dir: &Path,
+    writer: W,
+    format: &ArchiveFormat,
+) -> Result<(), String> {
+    let mut compressor = create_compressor_no_static(writer, format)?;
+    {
+        let mut archive = tar::Builder::new(&mut *compressor);
+        let mut files = Vec::new();
+        collect_files(source_dir, source_dir, &mut files)
+            .map_err(|e| format!("Failed to collect files: {}", e))?;
+        for (rel_path, abs_path, is_dir) in &files {
+            if *is_dir {
+                archive.append_dir(rel_path, source_dir)
+                    .map_err(|e| format!("Failed to add dir '{}': {}", rel_path, e))?;
+            } else {
+                let mut file = File::open(abs_path)
+                    .map_err(|e| format!("Failed to open '{}': {}", abs_path.display(), e))?;
+                archive.append_file(rel_path, &mut file)
+                    .map_err(|e| format!("Failed to add file '{}': {}", rel_path, e))?;
+            }
+        }
+    }
+    compressor.flush().map_err(|e| format!("Failed to flush: {}", e))?;
+    Ok(())
+}
+
+fn create_compressor_no_static<W: Write>(writer: W, format: &ArchiveFormat) -> Result<Box<dyn Write>, String> {
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use bzip2::write::BzEncoder;
+    use bzip2::Compression as BzCompression;
+    use xz2::write::XzEncoder;
+
+    match format {
+        ArchiveFormat::Tar => Ok(Box::new(writer)),
+        ArchiveFormat::TarGz => {
+            Ok(Box::new(GzEncoder::new(writer, Compression::default())))
+        }
+        ArchiveFormat::TarBz2 => {
+            Ok(Box::new(BzEncoder::new(writer, BzCompression::default())))
+        }
+        ArchiveFormat::TarXz => {
+            Ok(Box::new(XzEncoder::new(writer, 6)))
+        }
+        ArchiveFormat::TarZst => {
+            let encoder = zstd::stream::write::Encoder::new(writer, 3)
+                .map_err(|e| format!("Failed to create zstd encoder: {}", e))?;
+            Ok(Box::new(encoder.auto_finish()))
+        }
+    }
 }
 
 fn compress_dir_to_writer<W: Write + Send + 'static>(
