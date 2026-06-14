@@ -129,9 +129,9 @@ jobs:
         run: |
           FEATURES="${{ inputs.features || 'fs,search,diff,zip,archive,encoding,checksum,markdown,highlight,color,sanitize' }}"
           cargo ndk \
-            --target ${{ matrix.triple }} \
-            --platform 26 \
-            -- output-dir ../target-android/${{ matrix.lib_dir }} \
+            -t ${{ matrix.triple }} \
+            -p 26 \
+            -o ../target-android/${{ matrix.lib_dir }} \
             build --release --features "$FEATURES"
 
       - name: Verify .so
