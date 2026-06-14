@@ -82,7 +82,7 @@ impl Default for MarkdownOptions {
 ///
 /// This is the main entry point, replacing `renderMarkdown()` from renderer.js.
 pub fn render_markdown(text: &str, options: &MarkdownOptions) -> MarkdownResult {
-    let mut comrak_opts = comrak::ComrakOptions::default();
+    let mut comrak_opts = comrak::Options::default();
 
     // GFM extensions
     if options.gfm {
@@ -100,16 +100,11 @@ pub fn render_markdown(text: &str, options: &MarkdownOptions) -> MarkdownResult 
         comrak_opts.extension.footnotes = true;
     }
     if options.header_anchors {
-        comrak_opts.extension.header_ids = Some(String::new()); // empty = auto-generate
+        comrak_opts.extension.header_ids = Some("".to_string()); // empty = auto-generate
     }
 
     // Security
     comrak_opts.render.unsafe_ = !options.escape_html;
-
-    // Syntax highlighting in fenced code blocks
-    if options.syntax_highlighting {
-        comrak_opts.extension.front_matter_delimiter = None;
-    }
 
     // Detect math/mermaid before rendering (so the caller knows whether to
     // lazy-load KaTeX or Mermaid)

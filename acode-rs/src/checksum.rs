@@ -51,7 +51,7 @@ pub fn hash_file(path: &Path) -> Result<HashResult, String> {
     }
 
     let digest = hasher.finalize();
-    let hex = hex::encode(&digest);
+    let hex = format!("{:x}", digest);
 
     Ok(HashResult {
         hex,
@@ -67,7 +67,7 @@ pub fn hash_bytes(data: &[u8]) -> HashResult {
     let digest = hasher.finalize();
 
     HashResult {
-        hex: hex::encode(&digest),
+        hex: format!("{:x}", digest),
         bytes: digest.to_vec(),
         input_size: data.len() as u64,
     }
